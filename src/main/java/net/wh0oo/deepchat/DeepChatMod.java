@@ -10,7 +10,7 @@ import com.google.gson.*;
 import java.nio.file.*;
 import java.io.IOException;
 import java.util.concurrent.*;
-import java.util.Arrays; // Added missing import
+import java.util.Arrays;
 
 public class DeepChatMod implements ModInitializer {
     // Config paths
@@ -37,7 +37,6 @@ public class DeepChatMod implements ModInitializer {
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             String msg = message.getContent().getString();
             if (msg.startsWith("!ai ")) {
-                // Fixed: Use server's command source instead of player entity
                 ServerCommandSource source = sender.getServer().getCommandSource();
                 String query = msg.substring(4).trim();
                 executor.submit(() -> processQueryAsync(source, query));
@@ -55,10 +54,46 @@ public class DeepChatMod implements ModInitializer {
         }
     }
 
-    // ... [rest of setupConfigFiles() remains unchanged] ...
+    // ADDED MISSING METHOD
+    private void setupConfigFiles() {
+        try {
+            Files.createDirectories(Paths.get(CONFIG_DIR));
+            
+            if (!Files.exists(Paths.get(API_KEY_PATH))) {
+                Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
+            }
+            
+            if (!Files.exists(Paths.get(MODEL_PATH))) {
+                Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
+            }
+        } catch (IOException e) {
+            System.err.println("Config Error: " + e.getMessage());
+        }
+    }
 
+    // ADDED MISSING METHOD
+    private String processQueryWithRetry(String query) throws Exception {
+        String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
+        String model = validateModel(Files.readString(Paths.get(MODEL_PATH)).trim());
+
+        Request request = new Request.Builder()
+            .url("https://api.deepseek.com/v1/chat/completions")
+            .header("Authorization", "Bearer " + apiKey)
+            .post(RequestBody.create(buildRequestJson(model, query), JSON))
+            .build();
+
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.isSuccessful()) return parseResponse(response);
+                if (attempt == 3) throw new IOException("API Error: " + response.code());
+            }
+            Thread.sleep(1000 * attempt);
+        }
+        throw new IOException("Max retries exceeded");
+    }
+
+    // ADDED MISSING METHOD
     private String validateModel(String model) {
-        // Fixed: Added Arrays import
         if (!Arrays.asList(VALID_MODELS).contains(model.toLowerCase())) {
             System.err.println("Invalid model, using deepseek-chat");
             return "deepseek-chat";
@@ -66,9 +101,29 @@ public class DeepChatMod implements ModInitializer {
         return model;
     }
 
-    // ... [rest of methods remain unchanged] ...
+    // ADDED MISSING METHOD
+    private String buildRequestJson(String model, String query) {
+        return "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+              query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
+    }
 
-    // Fixed: Removed @Override annotation
+    // ADDED MISSING METHOD
+    private String parseResponse(Response response) throws IOException {
+        JsonObject json = JsonParser.parseString(response.body().string()).getAsJsonObject();
+        return json.getAsJsonArray("choices")
+            .get(0).getAsJsonObject()
+            .getAsJsonObject("message")
+            .get("content").getAsString();
+    }
+
+    // ADDED MISSING METHOD
+    private void executeServerSay(MinecraftServer server, String message) {
+        server.getCommandManager().executeWithPrefix(
+            server.getCommandSource().withSilent(),
+            "say " + message
+        );
+    }
+
     public void onDisable() {
         executor.shutdown();
     }
