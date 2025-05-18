@@ -9,8 +9,7 @@ import okhttp3.*;
 import com.google.gson.*;
 import java.nio.file.*;
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-import java.util.Arrays;
+import java.util.concurrent.*;
 
 public class DeepChatMod implements ModInitializer {
     // Config paths
@@ -18,16 +17,16 @@ public class DeepChatMod implements ModInitializer {
     private static final String API_KEY_PATH = CONFIG_DIR + "api_key.txt";
     private static final String MODEL_PATH = CONFIG_DIR + "model.txt";
     
-    // Valid models (July 2024 - from official docs)
-    private static final String[] VALID_MODELS = {
-        "deepseek-chat",     // General purpose ($0.14/M input tokens)
-        "deepseek-reasoner"  // Advanced reasoning ($0.28/M input tokens)
-    };
-    
+    // API settings
+    private static final String[] VALID_MODELS = {"deepseek-chat", "deepseek-reasoner"};
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    
+    // Execution pool (prevents thread starvation)
+    private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build();
 
     @Override
@@ -38,29 +37,29 @@ public class DeepChatMod implements ModInitializer {
             String msg = message.getContent().getString();
             if (msg.startsWith("!ai ")) {
                 String query = msg.substring(4).trim();
-                new Thread(() -> {
-                    try {
-                        String response = processQuery(query);
-                        executeServerSay(sender.getServer(), "[AI] " + response);
-                    } catch (Exception e) {
-                        executeServerSay(sender.getServer(), "[AI] Error: " + e.getMessage());
-                        System.err.println("API Error: " + e.getMessage());
-                    }
-                }).start();
+                executor.submit(() -> processQueryAsync(sender, query));
             }
         });
+    }
+
+    private void processQueryAsync(ServerCommandSource sender, String query) {
+        try {
+            String response = processQueryWithRetry(query);
+            executeServerSay(sender.getServer(), "[AI] " + response);
+        } catch (Exception e) {
+            executeServerSay(sender.getServer(), "[AI] Error: " + e.getMessage());
+            System.err.println("API Error: " + e.getMessage());
+        }
     }
 
     private void setupConfigFiles() {
         try {
             Files.createDirectories(Paths.get(CONFIG_DIR));
             
-            // Create API key file if missing
             if (!Files.exists(Paths.get(API_KEY_PATH))) {
                 Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
             }
             
-            // Initialize model file with default
             if (!Files.exists(Paths.get(MODEL_PATH))) {
                 Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
             }
@@ -69,36 +68,43 @@ public class DeepChatMod implements ModInitializer {
         }
     }
 
-    private String processQuery(String query) throws Exception {
+    private String processQueryWithRetry(String query) throws Exception {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
-        String model = Files.readString(Paths.get(MODEL_PATH)).trim().toLowerCase();
-        
-        // Validate model against official list
-        if (!Arrays.asList(VALID_MODELS).contains(model)) {
-            model = "deepseek-chat"; // Fallback to default
-            System.err.println("Invalid model in config, using deepseek-chat");
-        }
-
-        String json = "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
-                     query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
+        String model = validateModel(Files.readString(Paths.get(MODEL_PATH)).trim());
 
         Request request = new Request.Builder()
             .url("https://api.deepseek.com/v1/chat/completions")
             .header("Authorization", "Bearer " + apiKey)
-            .post(RequestBody.create(json, JSON))
+            .post(RequestBody.create(buildRequestJson(model, query), JSON))
             .build();
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            return parseResponse(response);
+        // Retry up to 3 times with backoff
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.isSuccessful()) return parseResponse(response);
+                if (attempt == 3) throw new IOException("API Error: " + response.code());
+            }
+            Thread.sleep(1000 * attempt); // Wait 1s, 2s, 3s
         }
+        throw new IOException("Max retries exceeded");
+    }
+
+    private String validateModel(String model) {
+        if (!Arrays.asList(VALID_MODELS).contains(model.toLowerCase())) {
+            System.err.println("Invalid model, using deepseek-chat");
+            return "deepseek-chat";
+        }
+        return model;
+    }
+
+    private String buildRequestJson(String model, String query) {
+        return "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+              query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
     }
 
     private String parseResponse(Response response) throws IOException {
-        if (!response.isSuccessful()) {
-            throw new IOException("API Error: " + response.code() + " - " + response.body().string());
-        }
-        JsonObject jsonResponse = JsonParser.parseString(response.body().string()).getAsJsonObject();
-        return jsonResponse.getAsJsonArray("choices")
+        JsonObject json = JsonParser.parseString(response.body().string()).getAsJsonObject();
+        return json.getAsJsonArray("choices")
             .get(0).getAsJsonObject()
             .getAsJsonObject("message")
             .get("content").getAsString();
@@ -109,5 +115,10 @@ public class DeepChatMod implements ModInitializer {
             server.getCommandSource().withSilent(),
             "say " + message
         );
+    }
+
+    @Override
+    public void onDisable() {
+        executor.shutdown(); // Cleanup threads on mod disable
     }
 }
