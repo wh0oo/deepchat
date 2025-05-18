@@ -67,7 +67,12 @@ public class DeepChatMod implements ModInitializer {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
         String model = Files.readString(Paths.get(MODEL_PATH)).trim();
         
-        String json = "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+        // Valid DeepSeek models
+        String apiModel = model.equals("deepseek-llm") ? 
+            "deepseek-llm" :  // light model
+            "deepseek-chat";   // default model
+
+        String json = "{\"model\":\"" + apiModel + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
                      query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
 
         Request request = new Request.Builder()
@@ -76,14 +81,8 @@ public class DeepChatMod implements ModInitializer {
             .post(RequestBody.create(json, JSON))
             .build();
 
-        // Try twice before failing
         try (Response response = httpClient.newCall(request).execute()) {
             return parseResponse(response);
-        } catch (Exception e) {
-            System.err.println("Retrying...");
-            try (Response response = httpClient.newCall(request).execute()) {
-                return parseResponse(response);
-            }
         }
     }
 
