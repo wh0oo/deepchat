@@ -5,38 +5,58 @@ import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.text.Text;
 import okhttp3.*;
 import com.google.gson.*;
+import java.nio.file.*;
+import java.io.IOException;
 
 public class DeepChatMod implements ModInitializer {
-    private static final String **API_KEY = "sk-your-key-here";** // ← **REPLACE WITH YOUR API KEY**
+    private static final String CONFIG_PATH = "config/deepchat/api_key.txt";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private final OkHttpClient httpClient = new OkHttpClient();
 
     @Override
     public void onInitialize() {
+        // Create config directory if missing
+        try {
+            Files.createDirectories(Paths.get("config/deepchat"));
+            if (!Files.exists(Paths.get(CONFIG_PATH))) {
+                Files.write(Paths.get(CONFIG_PATH), "paste-your-api-key-here".getBytes());
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to create config file: " + e.getMessage());
+        }
+
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             String msg = message.getContent().getString();
             if (msg.startsWith("!ai ")) {
                 String query = msg.substring(4).trim();
                 new Thread(() -> {
                     try {
-                        String response = callChatGPT(query);
-                        sender.sendMessage(Text.of("[AI] " + response), false);
+                        String apiKey = getApiKey();
+                        String response = callChatGPT(apiKey, query);
+                        message.getServer().getPlayerManager().broadcast(
+                            Text.of("[AI] " + response), 
+                            false
+                        );
                     } catch (Exception e) {
-                        sender.sendMessage(Text.of("[AI] Error: " + e.getMessage()), false);
+                        sender.sendMessage(Text.of("[AI] Error: Check server logs"), false);
+                        System.err.println("AI Error: " + e.getMessage());
                     }
                 }).start();
             }
         });
     }
 
-    private String callChatGPT(String query) throws Exception {
-        // **CHEAPEST SETTINGS (gpt-3.5-turbo, short responses)**
+    private String getApiKey() throws IOException {
+        return Files.readString(Paths.get(CONFIG_PATH)).trim();
+    }
+
+    private String callChatGPT(String apiKey, String query) throws Exception {
         String json = "{\"model\":\"gpt-3.5-turbo\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
-                     query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}"; // ← **LIMITS RESPONSE LENGTH**
+                     query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
 
         Request request = new Request.Builder()
             .url("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", "Bearer " + **API_KEY**) // ← **USE YOUR KEY**
+            .header("Authorization", "Bearer " + apiKey)
             .post(RequestBody.create(json, JSON))
             .build();
 
