@@ -33,12 +33,16 @@ public class DeepChatMod implements ModInitializer {
                     try {
                         String apiKey = getApiKey();
                         String response = callDeepSeek(apiKey, query);
-                        sender.getServer().getPlayerManager().broadcast(
-                            Text.of("[AI] " + response), 
-                            false
+                        // Send to both Minecraft and Discord via 'say'
+                        sender.getServer().getCommandManager().execute(
+                            sender.getServer().getCommandSource(),
+                            "say [AI] " + response
                         );
                     } catch (Exception e) {
-                        sender.sendMessage(Text.of("[AI] Error: Check server logs"), false);
+                        sender.getServer().getCommandManager().execute(
+                            sender.getServer().getCommandSource(),
+                            "say [AI] Error: Check server logs"
+                        );
                         System.err.println("DeepSeek Error: " + e.getMessage());
                     }
                 }).start();
