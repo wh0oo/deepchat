@@ -19,7 +19,7 @@ public class DeepChatMod implements ModInitializer {
         try {
             Files.createDirectories(Paths.get("config/deepchat"));
             if (!Files.exists(Paths.get(CONFIG_PATH))) {
-                Files.write(Paths.get(CONFIG_PATH), "paste-your-api-key-here".getBytes());
+                Files.write(Paths.get(CONFIG_PATH), "paste-your-deepseek-key-here".getBytes());
             }
         } catch (IOException e) {
             System.err.println("Failed to create config file: " + e.getMessage());
@@ -32,15 +32,14 @@ public class DeepChatMod implements ModInitializer {
                 new Thread(() -> {
                     try {
                         String apiKey = getApiKey();
-                        String response = callChatGPT(apiKey, query);
-                        // Fixed broadcast using sender instead of message
+                        String response = callDeepSeek(apiKey, query);
                         sender.getServer().getPlayerManager().broadcast(
                             Text.of("[AI] " + response), 
                             false
                         );
                     } catch (Exception e) {
                         sender.sendMessage(Text.of("[AI] Error: Check server logs"), false);
-                        System.err.println("AI Error: " + e.getMessage());
+                        System.err.println("DeepSeek Error: " + e.getMessage());
                     }
                 }).start();
             }
@@ -51,12 +50,12 @@ public class DeepChatMod implements ModInitializer {
         return Files.readString(Paths.get(CONFIG_PATH)).trim();
     }
 
-    private String callChatGPT(String apiKey, String query) throws Exception {
-        String json = "{\"model\":\"gpt-3.5-turbo\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+    private String callDeepSeek(String apiKey, String query) throws Exception {
+        String json = "{\"model\":\"deepseek-chat\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
                      query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
 
         Request request = new Request.Builder()
-            .url("https://api.openai.com/v1/chat/completions")
+            .url("https://api.deepseek.com/v1/chat/completions")
             .header("Authorization", "Bearer " + apiKey)
             .post(RequestBody.create(json, JSON))
             .build();
