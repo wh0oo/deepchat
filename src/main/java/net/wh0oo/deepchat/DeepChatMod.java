@@ -2,6 +2,7 @@ package net.wh0oo.deepchat;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 import okhttp3.*;
@@ -33,7 +34,6 @@ public class DeepChatMod implements ModInitializer {
                     try {
                         String apiKey = getApiKey();
                         String response = callDeepSeek(apiKey, query);
-                        // Proper command execution
                         executeServerSay(sender.getServer(), "[AI] " + response);
                     } catch (Exception e) {
                         executeServerSay(sender.getServer(), "[AI] Error: Check server logs");
