@@ -2,6 +2,7 @@ package net.wh0oo.deepchat;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 import okhttp3.*;
 import com.google.gson.*;
@@ -15,7 +16,6 @@ public class DeepChatMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        // Create config directory if missing
         try {
             Files.createDirectories(Paths.get("config/deepchat"));
             if (!Files.exists(Paths.get(CONFIG_PATH))) {
@@ -33,14 +33,14 @@ public class DeepChatMod implements ModInitializer {
                     try {
                         String apiKey = getApiKey();
                         String response = callDeepSeek(apiKey, query);
-                        // Send to both Minecraft and Discord via 'say'
+                        // Fixed command execution
                         sender.getServer().getCommandManager().execute(
-                            sender.getServer().getCommandSource(),
+                            sender.getServer().getCommandSource().withSilent(), 
                             "say [AI] " + response
                         );
                     } catch (Exception e) {
                         sender.getServer().getCommandManager().execute(
-                            sender.getServer().getCommandSource(),
+                            sender.getServer().getCommandSource().withSilent(),
                             "say [AI] Error: Check server logs"
                         );
                         System.err.println("DeepSeek Error: " + e.getMessage());
