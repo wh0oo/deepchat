@@ -10,6 +10,7 @@ import com.google.gson.*;
 import java.nio.file.*;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+import java.util.Arrays;
 
 public class DeepChatMod implements ModInitializer {
     // Config paths
@@ -17,7 +18,12 @@ public class DeepChatMod implements ModInitializer {
     private static final String API_KEY_PATH = CONFIG_DIR + "api_key.txt";
     private static final String MODEL_PATH = CONFIG_DIR + "model.txt";
     
-    // HTTP client
+    // Valid models (July 2024 - from official docs)
+    private static final String[] VALID_MODELS = {
+        "deepseek-chat",     // General purpose ($0.14/M input tokens)
+        "deepseek-reasoner"  // Advanced reasoning ($0.28/M input tokens)
+    };
+    
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -54,9 +60,9 @@ public class DeepChatMod implements ModInitializer {
                 Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
             }
             
-            // Create model config file with default "medium"
+            // Initialize model file with default
             if (!Files.exists(Paths.get(MODEL_PATH))) {
-                Files.write(Paths.get(MODEL_PATH), "medium".getBytes());
+                Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
             }
         } catch (IOException e) {
             System.err.println("Config Error: " + e.getMessage());
@@ -67,14 +73,13 @@ public class DeepChatMod implements ModInitializer {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
         String model = Files.readString(Paths.get(MODEL_PATH)).trim().toLowerCase();
         
-        // Map simple names to actual DeepSeek models
-        String apiModel = switch (model) {
-            case "light" -> "deepseek-chat-1.3-light";
-            case "full" -> "deepseek-coder-1.3-instruct";
-            default -> "deepseek-chat-1.3"; // medium/default
-        };
+        // Validate model against official list
+        if (!Arrays.asList(VALID_MODELS).contains(model)) {
+            model = "deepseek-chat"; // Fallback to default
+            System.err.println("Invalid model in config, using deepseek-chat");
+        }
 
-        String json = "{\"model\":\"" + apiModel + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+        String json = "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
                      query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
 
         Request request = new Request.Builder()
