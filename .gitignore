@@ -27,7 +27,7 @@ bin/
 # macos
 
 *.DS_Store
-
+config/deepchat/api_key.txt
 # fabric
 
 run/
