@@ -33,21 +33,22 @@ public class DeepChatMod implements ModInitializer {
                     try {
                         String apiKey = getApiKey();
                         String response = callDeepSeek(apiKey, query);
-                        // Fixed command execution
-                        sender.getServer().getCommandManager().execute(
-                            sender.getServer().getCommandSource().withSilent(), 
-                            "say [AI] " + response
-                        );
+                        // Proper command execution
+                        executeServerSay(sender.getServer(), "[AI] " + response);
                     } catch (Exception e) {
-                        sender.getServer().getCommandManager().execute(
-                            sender.getServer().getCommandSource().withSilent(),
-                            "say [AI] Error: Check server logs"
-                        );
+                        executeServerSay(sender.getServer(), "[AI] Error: Check server logs");
                         System.err.println("DeepSeek Error: " + e.getMessage());
                     }
                 }).start();
             }
         });
+    }
+
+    private void executeServerSay(MinecraftServer server, String message) {
+        server.getCommandManager().executeWithPrefix(
+            server.getCommandSource().withSilent(),
+            "say " + message
+        );
     }
 
     private String getApiKey() throws IOException {
