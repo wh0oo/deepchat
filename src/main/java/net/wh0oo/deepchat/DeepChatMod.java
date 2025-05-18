@@ -54,9 +54,9 @@ public class DeepChatMod implements ModInitializer {
                 Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
             }
             
-            // Create model config file if missing (default: deepseek-chat)
+            // Create model config file with default "medium"
             if (!Files.exists(Paths.get(MODEL_PATH))) {
-                Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
+                Files.write(Paths.get(MODEL_PATH), "medium".getBytes());
             }
         } catch (IOException e) {
             System.err.println("Config Error: " + e.getMessage());
@@ -65,12 +65,14 @@ public class DeepChatMod implements ModInitializer {
 
     private String processQuery(String query) throws Exception {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
-        String model = Files.readString(Paths.get(MODEL_PATH)).trim();
+        String model = Files.readString(Paths.get(MODEL_PATH)).trim().toLowerCase();
         
-        // Valid DeepSeek models
-        String apiModel = model.equals("deepseek-llm") ? 
-            "deepseek-llm" :  // light model
-            "deepseek-chat";   // default model
+        // Map simple names to actual DeepSeek models
+        String apiModel = switch (model) {
+            case "light" -> "deepseek-chat-1.3-light";
+            case "full" -> "deepseek-coder-1.3-instruct";
+            default -> "deepseek-chat-1.3"; // medium/default
+        };
 
         String json = "{\"model\":\"" + apiModel + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
                      query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
