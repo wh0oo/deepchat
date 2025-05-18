@@ -33,7 +33,8 @@ public class DeepChatMod implements ModInitializer {
                     try {
                         String apiKey = getApiKey();
                         String response = callChatGPT(apiKey, query);
-                        message.getServer().getPlayerManager().broadcast(
+                        // Fixed broadcast using sender instead of message
+                        sender.getServer().getPlayerManager().broadcast(
                             Text.of("[AI] " + response), 
                             false
                         );
