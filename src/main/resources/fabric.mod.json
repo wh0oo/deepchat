@@ -3,7 +3,7 @@
   "id": "deepchat",
   "version": "1.0.0",
   "name": "DeepChat",
-  "description": "ChatGPT integration for Minecraft",
+  "description": "Deepseek integration for Minecraft",
   "authors": ["wh0oo"],
   "license": "CC0-1.0",
   "environment": "server",
