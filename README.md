@@ -1,16 +1,26 @@
-# Deepchat
-## About
-Working proof of concept integrating deepseek AI with Minecraft server (1.21.5)
-## Setup
-1. Get a deepseek API key
-2. Upload the mod to mods directory on your server
-3. Update config file with your api key
-4. Update other config with your model
-    - Model Configuration:
-        - deepseek-chat      // Default (balanced)
-        - deepseek-llm // Faster but less capable
-        - gpt-3.5-turbo      // If you switch to OpenAI
-5. !ai <whatever> should work
-6. profit.
-## License
-This is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+# DeepChat
+*A Fabric proof of concept mod for integrating DeepSeek AI into Minecraft chat*
+
+## Features
+✅ **Implemented**
+- `!ai <question>` command in chat
+- Supports DeepSeek API (`deepseek-chat` and `deepseek-reasoner` models)
+- Automatic config file generation
+- Error handling with 3 retries
+
+⚠️ **Limitations**
+- API keys stored in plaintext (`config/deepchat/api_key.txt`)
+- No rate limiting or cooldowns
+- No encryption (planned for v2)
+
+## Installation
+1. Install [Fabric Loader](https://fabricmc.net/use/)
+2. Download the latest `.jar` from [Releases]()
+3. Place in `mods/` folder
+
+## Configuration
+1. After first run, edit:
+config/deepchat/
+- api_key.txt # Your DeepSeek API key
+-  model.txt # "deepseek-chat" or "deepseek-reasoner"
+
