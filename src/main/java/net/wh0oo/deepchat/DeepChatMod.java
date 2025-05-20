@@ -1,5 +1,8 @@
 package net.wh0oo.deepchat;
 
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptEngine;
+import javax.script.ScriptException;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.MinecraftServer;
@@ -38,6 +41,33 @@ public class DeepChatMod implements ModInitializer {
         });
     }
 
+    private String solveMathProblem(String problem) {
+        try {
+            // Normalize input
+            problem = problem.replaceAll("[,\\s]", "")
+                           .replace("×", "*")
+                           .replace("÷", "/");
+
+            // Use JavaScript engine for math evaluation
+            ScriptEngineManager mgr = new ScriptEngineManager();
+            ScriptEngine engine = mgr.getEngineByName("JavaScript");
+            Object result = engine.eval(problem);
+            
+            return "Result: " + formatNumber(Double.parseDouble(result.toString()));
+        } catch (ScriptException e) {
+            return "Math syntax error: " + e.getMessage();
+        } catch (Exception e) {
+            return "Calculation failed: " + e.getMessage();
+        }
+    }
+
+    private String formatNumber(double num) {
+        if (num == (long) num) {
+            return String.format("%,d", (long) num);
+        }
+        return String.format("%,.2f", num);
+    }
+
     private void handleAIQuery(ServerCommandSource source, UUID playerId, String query) {
         if (source == null || source.getServer() == null) return;
         
@@ -49,7 +79,7 @@ public class DeepChatMod implements ModInitializer {
         
         executor.submit(() -> {
             try {
-                String response = "Response from your AI implementation"; // Replace with actual API call
+                String response = "Response from your AI implementation"; // Replace with API call
                 executeServerSay(source.getServer(), "[AI] " + response);
             } catch (Exception e) {
                 source.sendError(Text.literal("Error: " + e.getMessage()));
@@ -57,54 +87,11 @@ public class DeepChatMod implements ModInitializer {
         });
     }
 
-    private String solveMathProblem(String problem) {
-        try {
-            // Normalize input
-            problem = problem.replaceAll("[,\\s]", "").replace("×", "*").replace("÷", "/");
-            
-            // Parse components
-            String[] parts = problem.split("[()+\\-*/^]");
-            if (parts.length < 6) return "Format: (num1*num2)+(num3/num4)-(num5^num6*num7)";
-            
-            // Handle exponents and decimals
-            double num1 = Double.parseDouble(parts[0]);
-            double num2 = Double.parseDouble(parts[1]);
-            double num3 = Double.parseDouble(parts[2]);
-            double num4 = Double.parseDouble(parts[3]);
-            double num5 = Double.parseDouble(parts[4]);
-            double num6 = Double.parseDouble(parts[5]);
-            
-            // Calculate
-            double mult1 = num1 * num2;
-            double div = num3 / num4;
-            double exp = Math.pow(num5, num6);
-            
-            // Handle optional decimal multiplier (e.g., 3.14)
-            double decimalMultiplier = parts.length > 6 ? Double.parseDouble(parts[6]) : 1.0;
-            double finalTerm = exp * decimalMultiplier;
-            
-            double result = mult1 + div - finalTerm;
-            
-            return String.format(
-                "%.0f × %.0f = %,.0f\n" +
-                "%.0f ÷ %.0f = %,.2f\n" +
-                "%.0f^%.0f × %.2f = %,.2f\n" +
-                "Result: %,.0f + %,.2f - %,.2f = **%,.2f**",
-                num1, num2, mult1,
-                num3, num4, div,
-                num5, num6, decimalMultiplier, finalTerm,
-                mult1, div, finalTerm, result
-            );
-        } catch (Exception e) {
-            return "Invalid math problem: " + e.getMessage();
-        }
-    }
-
     private void executeServerSay(MinecraftServer server, String message) {
         if (server == null || !server.isRunning()) return;
         server.getCommandManager().executeWithPrefix(
             server.getCommandSource().withLevel(4),
-            "say " + message.replace("**", "") // Remove markdown for Minecraft
+            "say " + message.replace("**", "")
         );
     }
 
