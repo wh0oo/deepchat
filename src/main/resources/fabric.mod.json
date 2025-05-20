@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "deepchat",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "name": "DeepChat",
   "description": "Deepseek integration for Minecraft",
   "authors": ["wh0oo"],
@@ -12,7 +12,7 @@
   },
   "depends": {
     "fabricloader": ">=0.15.11",
-    "minecraft": ">=1.21",
+    "minecraft": "=1.21.5",
     "fabric-api": "*"
   }
 }
