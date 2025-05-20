@@ -27,7 +27,7 @@ public class DeepChatMod implements ModInitializer {
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final Map<UUID, Long> lastQueryTimes = new ConcurrentHashMap<>();
     private static final long COOLDOWN_MS = 3000;
-    private static final int MAX_CHUNKS = 3; // Hard cap on message count
+    private static final int MAX_CHUNKS = 3;
     
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -42,16 +42,20 @@ public class DeepChatMod implements ModInitializer {
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             String msg = message.getContent().getString();
             if (msg.startsWith("!ai ")) {
-                ServerCommandSource source = sender.getServer().getCommandSource();
-                UUID playerId = sender.getUuid();
+                final ServerCommandSource source = sender.getServer().getCommandSource();
+                final UUID playerId = sender.getUuid();
                 String query = msg.substring(4).trim();
                 
-                // Parse [max=X] parameter (default: null = no limit)
-                Integer maxChars = null;
+                // Parse [max=X] parameter
+                final Integer maxChars;
+                final String finalQuery;
                 Matcher matcher = Pattern.compile("\\[max=(\\d+)\\]").matcher(query);
                 if (matcher.find()) {
                     maxChars = Integer.parseInt(matcher.group(1));
-                    query = query.replace(matcher.group(0), "").trim();
+                    finalQuery = query.replace(matcher.group(0), "").trim();
+                } else {
+                    maxChars = null;
+                    finalQuery = query;
                 }
 
                 if (source == null || source.getServer() == null) {
@@ -65,7 +69,7 @@ public class DeepChatMod implements ModInitializer {
                 }
                 lastQueryTimes.put(playerId, System.currentTimeMillis());
                 
-                executor.submit(() -> processQueryAsync(source, query, maxChars));
+                executor.submit(() -> processQueryAsync(source, finalQuery, maxChars));
             }
         });
     }
@@ -142,7 +146,6 @@ public class DeepChatMod implements ModInitializer {
         JsonObject request = new JsonObject();
         request.addProperty("model", model);
         
-        // Set token limit if maxChars specified (approximate 4 chars per token)
         if (maxChars != null) {
             request.addProperty("max_tokens", maxChars / 4);
         }
@@ -172,12 +175,10 @@ public class DeepChatMod implements ModInitializer {
         try {
             if (server == null || !server.isRunning()) return;
             
-            // Apply length limit if specified
             if (maxChars != null) {
                 message = message.substring(0, Math.min(message.length(), maxChars));
             }
             
-            // Split into max 3 chunks
             List<String> chunks = new ArrayList<>();
             int remaining = message.length();
             int chunkSize = (int) Math.ceil(message.length() / (double) MAX_CHUNKS);
@@ -188,7 +189,6 @@ public class DeepChatMod implements ModInitializer {
                 remaining -= (end - (i * chunkSize));
             }
             
-            // Send with sequence markers
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = String.format("[%d/%d] %s", i + 1, chunks.size(), chunks.get(i));
                 server.getCommandManager().executeWithPrefix(
