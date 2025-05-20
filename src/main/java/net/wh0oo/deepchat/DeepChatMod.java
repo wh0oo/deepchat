@@ -11,7 +11,6 @@ import java.nio.file.*;
 import java.io.IOException;
 import java.util.concurrent.*;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class DeepChatMod implements ModInitializer {
     // Config paths
@@ -24,9 +23,7 @@ public class DeepChatMod implements ModInitializer {
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     
     // Execution
-    private final ExecutorService executor = Executors.newFixedThreadPool(4);
-    private final ScheduledExecutorService monitor = Executors.newSingleThreadScheduledExecutor();
-    private final AtomicLong totalRequests = new AtomicLong(0);
+    private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final Map<UUID, Long> lastQueryTimes = new ConcurrentHashMap<>();
     private static final long COOLDOWN_MS = 3000;
     
@@ -39,7 +36,6 @@ public class DeepChatMod implements ModInitializer {
     @Override
     public void onInitialize() {
         setupConfigFiles();
-        startMonitoring();
         
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             String msg = message.getContent().getString();
@@ -78,36 +74,33 @@ public class DeepChatMod implements ModInitializer {
         }
     }
 
-    private void startMonitoring() {
-        monitor.scheduleAtFixedRate(() -> {
-            System.out.printf("[DeepChat] Stats - Active: %d, Queued: %d, Total: %d%n",
-                ((ThreadPoolExecutor)executor).getActiveCount(),
-                ((ThreadPoolExecutor)executor).getQueue().size(),
-                totalRequests.get());
-        }, 0, 5, TimeUnit.SECONDS);
-    }
-
     private void processQueryAsync(ServerCommandSource source, String query) {
-        totalRequests.incrementAndGet();
-        long startTime = System.currentTimeMillis();
-        
         try {
             System.out.println("[DeepChat] Processing: " + query);
             String response = processQueryWithRetry(query);
-            long duration = System.currentTimeMillis() - startTime;
             
             if (response == null || response.trim().isEmpty()) {
                 throw new IOException("Empty API response");
             }
             
-            executeServerSay(source.getServer(), 
-                String.format("[AI] [%dms] %s", duration, response));
+            executeServerSay(source.getServer(), "[AI] " + cleanMessage(response));
                 
         } catch (Exception e) {
             System.err.println("[ERROR] " + e.getMessage());
             source.sendError(Text.literal("AI Error: " + 
                 e.getMessage().replaceAll("(?i)api key", "[REDACTED]")));
         }
+    }
+
+    private String cleanMessage(String message) {
+        return message
+            .replace("**", "")  // Remove Markdown bold
+            .replace("*", "")   // Remove italics
+            .replace("`", "")   // Remove code marks
+            .replace("#", "")   // Remove headers
+            .replace("\n", " ") // Flatten newlines
+            .replace("\"", "'") // Replace problematic quotes
+            .substring(0, Math.min(message.length(), 240)); // Limit length
     }
 
     private String processQueryWithRetry(String query) throws Exception {
@@ -152,18 +145,23 @@ public class DeepChatMod implements ModInitializer {
 
     private void executeServerSay(MinecraftServer server, String message) {
         try {
-            server.getCommandManager().executeWithPrefix(
+            if (server == null || !server.isRunning()) return;
+            
+            String command = "say " + message;
+            int result = server.getCommandManager().executeWithPrefix(
                 server.getCommandSource().withLevel(4).withSilent(),
-                "say " + message
+                command
             );
-            System.out.println("[Broadcast] Success: " + message);
+            
+            if (result <= 0) {
+                System.err.println("[Broadcast] Failed to execute: " + command);
+            }
         } catch (Exception e) {
-            System.err.println("[Broadcast] Failed: " + e.getMessage());
+            System.err.println("[Broadcast] Critical error: " + e.getMessage());
         }
     }
 
     public void onDisable() {
         executor.shutdown();
-        monitor.shutdown();
     }
 }
