@@ -29,9 +29,10 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    implementation 'org.openjdk.nashorn:nashorn-core:15.4'
+    implementation "net.objecthunter:exp4j:0.4.8"
+    implementation "com.google.code.gson:gson:2.10.1"
      // Add this line (okhttp for API calls):
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
 }
 
 // Rest of the file remains unchanged...
