@@ -7,35 +7,33 @@ version = project.mod_version
 group = project.maven_group
 
 base {
-    archivesName = 'deepchat'  // Changed from project.archives_base_name
+    archivesName = 'deepchat'
 }
 
 repositories {
-    // Keep existing repositories
-}
-
-loom {
-    splitEnvironmentSourceSets()
-
-    mods {
-        "deepchat" {  // Changed from "modid"
-            sourceSet sourceSets.main
-        }
-    }
+    // Keep your existing repositories
+    mavenCentral() // Required for exp4j
 }
 
 dependencies {
+    // Minecraft/Fabric
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    implementation "net.objecthunter:exp4j:0.4.8"
-    implementation "com.google.code.gson:gson:2.10.1"
-     // Add this line (okhttp for API calls):
-    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+
+    // Dependencies to bundle (CRITICAL)
+    implementation 'net.objecthunter:exp4j:0.4.8'
+    include 'net.objecthunter:exp4j:0.4.8'
+    
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    include 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // Add GSON if you're using it for JSON parsing
+    implementation 'com.google.code.gson:gson:2.10.1'
+    include 'com.google.code.gson:gson:2.10.1'
 }
 
-// Rest of the file remains unchanged...
 processResources {
     inputs.property "version", project.version
     filesMatching("fabric.mod.json") {
@@ -57,12 +55,19 @@ jar {
     from("LICENSE") {
         rename { "${it}_${base.archivesName.get()}"}
     }
+    // Merge all included dependencies
+    from {
+        configurations.include.collect { 
+            it.isDirectory() ? it : zipTree(it) 
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE // Prevent conflicts
 }
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId = 'deepchat'  // Changed from project.archives_base_name
+            artifactId = 'deepchat'
             from components.java
         }
     }
