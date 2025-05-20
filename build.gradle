@@ -1,9 +1,10 @@
 plugins {
-    id 'fabric-loom' version '1.10.5' // Pinned to exact version
+    id 'fabric-loom' version '1.10.5'
     id 'maven-publish'
 }
 
-version = project.mod_version
+// ▼ Update version here (e.g., 0.2.0) ▼
+version = "1.2.0"
 group = project.maven_group
 
 base {
@@ -15,20 +16,18 @@ repositories {
 }
 
 dependencies {
-    // Minecraft/Fabric
+    // Minecraft/Fabric (unchanged)
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // Dependencies (using modImplementation instead of include)
-    modImplementation 'net.objecthunter:exp4j:0.4.8'
-    modImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    modImplementation 'com.google.code.gson:gson:2.10.1'
+    // Essential dependencies (no exp4j)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    include 'com.squareup.okhttp3:okhttp:4.12.0'
     
-    // Required for runtime
-    runtimeOnly 'net.objecthunter:exp4j:0.4.8'
-    runtimeOnly 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    include 'com.google.code.gson:gson:2.10.1'
 }
 
 processResources {
@@ -52,7 +51,6 @@ jar {
     from("LICENSE") {
         rename { "${it}_${base.archivesName.get()}"}
     }
-    // No special include handling needed for GitHub Actions
 }
 
 publishing {
