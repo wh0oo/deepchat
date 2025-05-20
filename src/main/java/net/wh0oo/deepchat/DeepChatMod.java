@@ -71,6 +71,42 @@ public class DeepChatMod implements ModInitializer {
         });
     }
 
+    private void setupConfigFiles() {
+        try {
+            Files.createDirectories(Paths.get(CONFIG_DIR));
+            
+            if (!Files.exists(Paths.get(API_KEY_PATH))) {
+                Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
+            }
+            
+            if (!Files.exists(Paths.get(MODEL_PATH))) {
+                Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
+            }
+        } catch (IOException e) {
+            System.err.println("Config Error: " + e.getMessage());
+        }
+    }
+
+    private String validateModel(String model) {
+        if (!Arrays.asList(VALID_MODELS).contains(model.toLowerCase())) {
+            System.err.println("Invalid model, using deepseek-chat");
+            return "deepseek-chat";
+        }
+        return model;
+    }
+
+    private String buildRequestJson(String model, String query) {
+        return "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+              query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
+    }
+
+    private void executeServerSay(MinecraftServer server, String message) {
+        server.getCommandManager().executeWithPrefix(
+            server.getCommandSource().withSilent(),
+            "say " + message
+        );
+    }
+
     private void startMonitoring() {
         monitor.scheduleAtFixedRate(() -> {
             System.out.printf("[DeepChat] Stats - Active: %d, Queued: %d, Total: %d%n",
@@ -157,9 +193,6 @@ public class DeepChatMod implements ModInitializer {
         }
     }
 
-    // ... (keep existing methods: setupConfigFiles, validateModel, buildRequestJson, executeServerSay)
-
-    @Override
     public void onDisable() {
         executor.shutdown();
         monitor.shutdown();
