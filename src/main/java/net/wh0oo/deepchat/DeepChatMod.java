@@ -11,6 +11,7 @@ import java.nio.file.*;
 import java.io.IOException;
 import java.util.concurrent.*;
 import java.util.*;
+import java.util.regex.*;
 
 public class DeepChatMod implements ModInitializer {
     // Config paths
@@ -26,6 +27,7 @@ public class DeepChatMod implements ModInitializer {
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final Map<UUID, Long> lastQueryTimes = new ConcurrentHashMap<>();
     private static final long COOLDOWN_MS = 3000;
+    private static final int MAX_CHUNKS = 3; // Hard cap on message count
     
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -44,6 +46,14 @@ public class DeepChatMod implements ModInitializer {
                 UUID playerId = sender.getUuid();
                 String query = msg.substring(4).trim();
                 
+                // Parse [max=X] parameter (default: null = no limit)
+                Integer maxChars = null;
+                Matcher matcher = Pattern.compile("\\[max=(\\d+)\\]").matcher(query);
+                if (matcher.find()) {
+                    maxChars = Integer.parseInt(matcher.group(1));
+                    query = query.replace(matcher.group(0), "").trim();
+                }
+
                 if (source == null || source.getServer() == null) {
                     System.err.println("[ERROR] Invalid command source");
                     return;
@@ -55,7 +65,7 @@ public class DeepChatMod implements ModInitializer {
                 }
                 lastQueryTimes.put(playerId, System.currentTimeMillis());
                 
-                executor.submit(() -> processQueryAsync(source, query));
+                executor.submit(() -> processQueryAsync(source, query, maxChars));
             }
         });
     }
@@ -76,16 +86,16 @@ public class DeepChatMod implements ModInitializer {
         }
     }
 
-    private void processQueryAsync(ServerCommandSource source, String query) {
+    private void processQueryAsync(ServerCommandSource source, String query, Integer maxChars) {
         try {
             System.out.println("[DeepChat] Processing: " + query);
-            String response = processQueryWithRetry(query);
+            String response = processQueryWithRetry(query, maxChars);
             
             if (response == null || response.trim().isEmpty()) {
                 throw new IOException("Empty API response");
             }
             
-            executeServerSay(source.getServer(), "[AI] " + cleanMessage(response));
+            executeServerSay(source.getServer(), "[AI] " + cleanMessage(response), maxChars);
                 
         } catch (Exception e) {
             System.err.println("[ERROR] " + e.getMessage());
@@ -96,19 +106,18 @@ public class DeepChatMod implements ModInitializer {
 
     private String cleanMessage(String message) {
         return message
-            .replace("**", "")  // Remove Markdown bold
-            .replace("*", "")   // Remove italics
-            .replace("`", "")   // Remove code marks
-            .replace("#", "")   // Remove headers
-            .replace("\n", " ") // Flatten newlines
-            .replace("\"", "'") // Replace problematic quotes
-            .substring(0, Math.min(message.length(), 240)); // Limit length
+            .replace("**", "")
+            .replace("*", "")
+            .replace("`", "")
+            .replace("#", "")
+            .replace("\n", " ")
+            .replace("\"", "'");
     }
 
-    private String processQueryWithRetry(String query) throws Exception {
+    private String processQueryWithRetry(String query, Integer maxChars) throws Exception {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
         String model = validateModel(Files.readString(Paths.get(MODEL_PATH)).trim());
-        String jsonPayload = buildRequestJson(model, query);
+        String jsonPayload = buildRequestJson(model, query, maxChars);
         
         Request request = new Request.Builder()
             .url("https://api.deepseek.com/v1/chat/completions")
@@ -129,9 +138,23 @@ public class DeepChatMod implements ModInitializer {
         return Arrays.asList(VALID_MODELS).contains(model.toLowerCase()) ? model : "deepseek-chat";
     }
 
-    private String buildRequestJson(String model, String query) {
-        return "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
-              query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
+    private String buildRequestJson(String model, String query, Integer maxChars) {
+        JsonObject request = new JsonObject();
+        request.addProperty("model", model);
+        
+        // Set token limit if maxChars specified (approximate 4 chars per token)
+        if (maxChars != null) {
+            request.addProperty("max_tokens", maxChars / 4);
+        }
+        
+        JsonArray messages = new JsonArray();
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "user");
+        message.addProperty("content", query);
+        messages.add(message);
+        request.add("messages", messages);
+        
+        return request.toString();
     }
 
     private String parseResponse(String rawResponse) throws IOException {
@@ -145,16 +168,34 @@ public class DeepChatMod implements ModInitializer {
             .get("content").getAsString();
     }
 
-    private void executeServerSay(MinecraftServer server, String message) {
+    private void executeServerSay(MinecraftServer server, String message, Integer maxChars) {
         try {
             if (server == null || !server.isRunning()) return;
             
-            String command = "say " + message;
-            server.getCommandManager().executeWithPrefix(
-                server.getCommandSource().withLevel(4).withSilent(),
-                command
-            );
-            System.out.println("[Broadcast] Executed: " + command);
+            // Apply length limit if specified
+            if (maxChars != null) {
+                message = message.substring(0, Math.min(message.length(), maxChars));
+            }
+            
+            // Split into max 3 chunks
+            List<String> chunks = new ArrayList<>();
+            int remaining = message.length();
+            int chunkSize = (int) Math.ceil(message.length() / (double) MAX_CHUNKS);
+            
+            for (int i = 0; i < MAX_CHUNKS && remaining > 0; i++) {
+                int end = Math.min((i + 1) * chunkSize, message.length());
+                chunks.add(message.substring(i * chunkSize, end));
+                remaining -= (end - (i * chunkSize));
+            }
+            
+            // Send with sequence markers
+            for (int i = 0; i < chunks.size(); i++) {
+                String chunk = String.format("[%d/%d] %s", i + 1, chunks.size(), chunks.get(i));
+                server.getCommandManager().executeWithPrefix(
+                    server.getCommandSource().withLevel(4),
+                    "say " + chunk
+                );
+            }
         } catch (Exception e) {
             System.err.println("[Broadcast] Failed: " + e.getMessage());
         }
