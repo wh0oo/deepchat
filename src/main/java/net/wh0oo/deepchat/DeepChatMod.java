@@ -23,12 +23,10 @@ public class DeepChatMod implements ModInitializer {
     private static final String[] VALID_MODELS = {"deepseek-chat", "deepseek-reasoner"};
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     
-    // Execution pool with monitoring
+    // Execution
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final ScheduledExecutorService monitor = Executors.newSingleThreadScheduledExecutor();
     private final AtomicLong totalRequests = new AtomicLong(0);
-    
-    // Rate limiting
     private final Map<UUID, Long> lastQueryTimes = new ConcurrentHashMap<>();
     private static final long COOLDOWN_MS = 3000;
     
@@ -36,15 +34,6 @@ public class DeepChatMod implements ModInitializer {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
-        .addInterceptor(chain -> {
-            Request request = chain.request();
-            long startTime = System.nanoTime();
-            Response response = chain.proceed(request);
-            long durationMs = (System.nanoTime() - startTime) / 1_000_000;
-            System.out.printf("[Network] %s %s (%d ms)%n",
-                request.method(), request.url(), durationMs);
-            return response;
-        })
         .build();
 
     @Override
@@ -59,7 +48,11 @@ public class DeepChatMod implements ModInitializer {
                 UUID playerId = sender.getUuid();
                 String query = msg.substring(4).trim();
                 
-                // Rate limit check
+                if (source == null || source.getServer() == null) {
+                    System.err.println("[ERROR] Invalid command source");
+                    return;
+                }
+                
                 if (System.currentTimeMillis() - lastQueryTimes.getOrDefault(playerId, 0L) < COOLDOWN_MS) {
                     source.sendError(Text.literal("Please wait 3 seconds between queries!"));
                     return;
@@ -74,37 +67,15 @@ public class DeepChatMod implements ModInitializer {
     private void setupConfigFiles() {
         try {
             Files.createDirectories(Paths.get(CONFIG_DIR));
-            
             if (!Files.exists(Paths.get(API_KEY_PATH))) {
                 Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
             }
-            
             if (!Files.exists(Paths.get(MODEL_PATH))) {
                 Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
             }
         } catch (IOException e) {
             System.err.println("Config Error: " + e.getMessage());
         }
-    }
-
-    private String validateModel(String model) {
-        if (!Arrays.asList(VALID_MODELS).contains(model.toLowerCase())) {
-            System.err.println("Invalid model, using deepseek-chat");
-            return "deepseek-chat";
-        }
-        return model;
-    }
-
-    private String buildRequestJson(String model, String query) {
-        return "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
-              query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
-    }
-
-    private void executeServerSay(MinecraftServer server, String message) {
-        server.getCommandManager().executeWithPrefix(
-            server.getCommandSource().withSilent(),
-            "say " + message
-        );
     }
 
     private void startMonitoring() {
@@ -121,38 +92,28 @@ public class DeepChatMod implements ModInitializer {
         long startTime = System.currentTimeMillis();
         
         try {
-            System.out.println("[DeepChat] Processing query: " + query);
+            System.out.println("[DeepChat] Processing: " + query);
             String response = processQueryWithRetry(query);
             long duration = System.currentTimeMillis() - startTime;
+            
+            if (response == null || response.trim().isEmpty()) {
+                throw new IOException("Empty API response");
+            }
             
             executeServerSay(source.getServer(), 
                 String.format("[AI] [%dms] %s", duration, response));
                 
         } catch (Exception e) {
-            System.err.println("[DeepChat] Error processing query: " + e.getMessage());
-            e.printStackTrace();
-            executeServerSay(source.getServer(), 
-                "[AI Error] " + e.getMessage().replaceAll("(?i)api key", "[REDACTED]"));
+            System.err.println("[ERROR] " + e.getMessage());
+            source.sendError(Text.literal("AI Error: " + 
+                e.getMessage().replaceAll("(?i)api key", "[REDACTED]")));
         }
     }
 
     private String processQueryWithRetry(String query) throws Exception {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
         String model = validateModel(Files.readString(Paths.get(MODEL_PATH)).trim());
-
-        // Network check
-        try {
-            Request testRequest = new Request.Builder()
-                .url("https://api.deepseek.com/health")
-                .build();
-            Response testResponse = httpClient.newCall(testRequest).execute();
-            System.out.println("[Network] Test response: " + testResponse.code());
-        } catch (Exception e) {
-            throw new IOException("Network unreachable: " + e.getMessage());
-        }
-
         String jsonPayload = buildRequestJson(model, query);
-        System.out.println("[DeepChat] Sending JSON: " + jsonPayload);
         
         Request request = new Request.Builder()
             .url("https://api.deepseek.com/v1/chat/completions")
@@ -160,48 +121,49 @@ public class DeepChatMod implements ModInitializer {
             .post(RequestBody.create(jsonPayload, JSON))
             .build();
 
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            try (Response response = httpClient.newCall(request).execute()) {
-                String rawResponse = response.body().string();
-                System.out.println("[DeepChat] Raw API response: " + rawResponse);
-                
-                if (!response.isSuccessful()) {
-                    throw new IOException("HTTP " + response.code() + ": " + rawResponse);
-                }
-                return parseResponse(rawResponse);
-            } catch (IOException e) {
-                if (attempt == 3) throw e;
-                Thread.sleep(1000 * attempt);
+        try (Response response = httpClient.newCall(request).execute()) {
+            String rawResponse = response.body().string();
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code() + ": " + rawResponse);
             }
+            return parseResponse(rawResponse);
         }
-        throw new IOException("Max retries exceeded");
+    }
+
+    private String validateModel(String model) {
+        return Arrays.asList(VALID_MODELS).contains(model.toLowerCase()) ? model : "deepseek-chat";
+    }
+
+    private String buildRequestJson(String model, String query) {
+        return "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"" + 
+              query.replace("\"", "\\\"") + "\"}],\"max_tokens\":100}";
     }
 
     private String parseResponse(String rawResponse) throws IOException {
+        JsonObject json = JsonParser.parseString(rawResponse).getAsJsonObject();
+        if (json.has("error")) {
+            throw new IOException(json.get("error").toString());
+        }
+        return json.getAsJsonArray("choices")
+            .get(0).getAsJsonObject()
+            .getAsJsonObject("message")
+            .get("content").getAsString();
+    }
+
+    private void executeServerSay(MinecraftServer server, String message) {
         try {
-            JsonObject json = JsonParser.parseString(rawResponse).getAsJsonObject();
-            if (json.has("error")) {
-                throw new IOException(json.get("error").toString());
-            }
-            return json.getAsJsonArray("choices")
-                .get(0).getAsJsonObject()
-                .getAsJsonObject("message")
-                .get("content").getAsString();
+            server.getCommandManager().executeWithPrefix(
+                server.getCommandSource().withLevel(4).withSilent(),
+                "say " + message
+            );
+            System.out.println("[Broadcast] Success: " + message);
         } catch (Exception e) {
-            System.err.println("Failed to parse: " + rawResponse);
-            throw new IOException("Invalid API response format", e);
+            System.err.println("[Broadcast] Failed: " + e.getMessage());
         }
     }
 
     public void onDisable() {
         executor.shutdown();
         monitor.shutdown();
-        try {
-            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 }
