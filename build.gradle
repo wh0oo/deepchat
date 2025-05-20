@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'fabric-loom' version '1.10.5' // Pinned to exact version
     id 'maven-publish'
 }
 
@@ -11,8 +11,7 @@ base {
 }
 
 repositories {
-    // Keep your existing repositories
-    mavenCentral() // Required for exp4j
+    mavenCentral()
 }
 
 dependencies {
@@ -22,16 +21,14 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // Dependencies to bundle (CRITICAL)
-    implementation 'net.objecthunter:exp4j:0.4.8'
-    include 'net.objecthunter:exp4j:0.4.8'
+    // Dependencies (using modImplementation instead of include)
+    modImplementation 'net.objecthunter:exp4j:0.4.8'
+    modImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    modImplementation 'com.google.code.gson:gson:2.10.1'
     
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    include 'com.squareup.okhttp3:okhttp:4.12.0'
-    
-    // Add GSON if you're using it for JSON parsing
-    implementation 'com.google.code.gson:gson:2.10.1'
-    include 'com.google.code.gson:gson:2.10.1'
+    // Required for runtime
+    runtimeOnly 'net.objecthunter:exp4j:0.4.8'
+    runtimeOnly 'com.squareup.okhttp3:okhttp:4.12.0'
 }
 
 processResources {
@@ -55,13 +52,7 @@ jar {
     from("LICENSE") {
         rename { "${it}_${base.archivesName.get()}"}
     }
-    // Merge all included dependencies
-    from {
-        configurations.include.collect { 
-            it.isDirectory() ? it : zipTree(it) 
-        }
-    }
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE // Prevent conflicts
+    // No special include handling needed for GitHub Actions
 }
 
 publishing {
