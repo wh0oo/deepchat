@@ -63,9 +63,11 @@ public class DeepChatMod implements ModInitializer {
     private void setupConfigFiles() {
         try {
             Files.createDirectories(Paths.get(CONFIG_DIR));
+            
             if (!Files.exists(Paths.get(API_KEY_PATH))) {
                 Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
             }
+            
             if (!Files.exists(Paths.get(MODEL_PATH))) {
                 Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
             }
@@ -148,16 +150,13 @@ public class DeepChatMod implements ModInitializer {
             if (server == null || !server.isRunning()) return;
             
             String command = "say " + message;
-            int result = server.getCommandManager().executeWithPrefix(
+            server.getCommandManager().executeWithPrefix(
                 server.getCommandSource().withLevel(4).withSilent(),
                 command
             );
-            
-            if (result <= 0) {
-                System.err.println("[Broadcast] Failed to execute: " + command);
-            }
+            System.out.println("[Broadcast] Executed: " + command);
         } catch (Exception e) {
-            System.err.println("[Broadcast] Critical error: " + e.getMessage());
+            System.err.println("[Broadcast] Failed: " + e.getMessage());
         }
     }
 
