@@ -28,6 +28,7 @@ public class DeepChatMod implements ModInitializer {
     private final Map<UUID, Long> lastQueryTimes = new ConcurrentHashMap<>();
     private static final long COOLDOWN_MS = 3000;
     private static final int MAX_CHUNKS = 3;
+    private static final int SINGLE_MESSAGE_THRESHOLD = 240; // Don't split if under this length
     
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -99,7 +100,7 @@ public class DeepChatMod implements ModInitializer {
                 throw new IOException("Empty API response");
             }
             
-            executeServerSay(source.getServer(), "[AI] " + cleanMessage(response), maxChars);
+            executeServerSay(source.getServer(), cleanMessage(response), maxChars);
                 
         } catch (Exception e) {
             System.err.println("[ERROR] " + e.getMessage());
@@ -110,12 +111,12 @@ public class DeepChatMod implements ModInitializer {
 
     private String cleanMessage(String message) {
         return message
-            .replace("**", "")
-            .replace("*", "")
-            .replace("`", "")
-            .replace("#", "")
-            .replace("\n", " ")
-            .replace("\"", "'");
+            .replace("**", "")  // Remove Markdown bold
+            .replace("*", "")   // Remove italics
+            .replace("`", "")   // Remove code marks
+            .replace("#", "")   // Remove headers
+            .replace("\n", " ") // Flatten newlines
+            .replace("\"", "'"); // Replace problematic quotes
     }
 
     private String processQueryWithRetry(String query, Integer maxChars) throws Exception {
@@ -147,7 +148,7 @@ public class DeepChatMod implements ModInitializer {
         request.addProperty("model", model);
         
         if (maxChars != null) {
-            request.addProperty("max_tokens", maxChars / 4);
+            request.addProperty("max_tokens", maxChars / 4); // ~4 chars per token
         }
         
         JsonArray messages = new JsonArray();
@@ -175,27 +176,53 @@ public class DeepChatMod implements ModInitializer {
         try {
             if (server == null || !server.isRunning()) return;
             
+            // Apply length limit if specified
             if (maxChars != null) {
                 message = message.substring(0, Math.min(message.length(), maxChars));
             }
             
-            List<String> chunks = new ArrayList<>();
-            int remaining = message.length();
-            int chunkSize = (int) Math.ceil(message.length() / (double) MAX_CHUNKS);
-            
-            for (int i = 0; i < MAX_CHUNKS && remaining > 0; i++) {
-                int end = Math.min((i + 1) * chunkSize, message.length());
-                chunks.add(message.substring(i * chunkSize, end));
-                remaining -= (end - (i * chunkSize));
-            }
-            
-            for (int i = 0; i < chunks.size(); i++) {
-                String chunk = String.format("[%d/%d] %s", i + 1, chunks.size(), chunks.get(i));
+            // Don't split short messages
+            if (message.length() <= SINGLE_MESSAGE_THRESHOLD) {
                 server.getCommandManager().executeWithPrefix(
                     server.getCommandSource().withLevel(4),
-                    "say " + chunk
+                    "say [AI] " + message
+                );
+                return;
+            }
+            
+            // Smart word-aware splitting for long messages
+            List<String> chunks = new ArrayList<>();
+            int start = 0;
+            int remainingLength = message.length();
+            
+            while (remainingLength > 0 && chunks.size() < MAX_CHUNKS - 1) {
+                int chunkLength = Math.min(220, remainingLength); // Reserve space for prefix
+                int splitAt = message.lastIndexOf(' ', start + chunkLength);
+                
+                if (splitAt <= start) splitAt = start + chunkLength; // No spaces found
+                
+                chunks.add(message.substring(start, splitAt).trim());
+                remainingLength -= (splitAt - start);
+                start = splitAt;
+            }
+            
+            // Add remaining content (last chunk)
+            if (remainingLength > 0) {
+                String lastChunk = message.substring(start);
+                if (chunks.size() == MAX_CHUNKS - 1) {
+                    lastChunk = "[...] " + lastChunk.substring(0, Math.min(100, lastChunk.length()));
+                }
+                chunks.add(lastChunk);
+            }
+            
+            // Send formatted messages
+            for (int i = 0; i < chunks.size(); i++) {
+                server.getCommandManager().executeWithPrefix(
+                    server.getCommandSource().withLevel(4),
+                    String.format("say [AI %d/%d] %s", i+1, chunks.size(), chunks.get(i))
                 );
             }
+            
         } catch (Exception e) {
             System.err.println("[Broadcast] Failed: " + e.getMessage());
         }
