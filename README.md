@@ -1,7 +1,13 @@
 # DeepChat
 *A Fabric proof of concept mod for integrating DeepSeek AI into Minecraft chat*
 
-## Features
+🔥 See it in action:
+Join **The Netherhood** at  
+**`netherhood.blockworlds.io`**  
+or direct IP: **`76.164.199.69:25565`**
+
+## Features ## 
+
 ✅ **Implemented**
 - `!ai <question>` command in chat
 - Supports DeepSeek API (`deepseek-chat` and `deepseek-reasoner` models)
