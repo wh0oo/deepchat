@@ -1,3 +1,5 @@
+[![build](https://github.com/wh0oo/deepchat/actions/workflows/build.yml/badge.svg?branch=1.25-debug)](https://github.com/wh0oo/deepchat/actions/workflows/build.yml)
+
 # DeepChat
 *A Fabric proof of concept mod for integrating DeepSeek AI into Minecraft chat*
 
