@@ -15,7 +15,7 @@
 
 ## Installation
 1. Install [Fabric Loader](https://fabricmc.net/use/)
-2. Download the latest `.jar` from [Releases]()
+2. Download the latest `.jar` from [DeepChat on Modrinth](https://modrinth.com/mod/deepchat)
 3. Place in `mods/` folder
 
 ## Configuration
