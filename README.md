@@ -32,3 +32,5 @@ config/deepchat/
 - api_key.txt # Your DeepSeek API key
 -  model.txt # "deepseek-chat" or "deepseek-reasoner"
 
+This readme was created by DeepSeek
+
