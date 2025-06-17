@@ -3,31 +3,38 @@ plugins {
     id 'maven-publish'
 }
 
-// ▼ Update version here (e.g., 0.2.0) ▼
-version = "1.2.0"
+version = project.mod_version
 group = project.maven_group
 
 base {
-    archivesName = 'deepchat'
+    archivesName = project.archives_base_name
 }
 
 repositories {
     mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+    maven { url = 'https://jitpack.io' }
 }
 
 dependencies {
-    // Minecraft/Fabric (unchanged)
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // Essential dependencies (no exp4j)
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    include 'com.squareup.okhttp3:okhttp:4.12.0'
-    
-    implementation 'com.google.code.gson:gson:2.10.1'
-    include 'com.google.code.gson:gson:2.10.1'
+    // (Other dependencies — keep these as you had them)
+    implementation 'io.github.llamalad7:mixinextras-fabric:0.4.1'
+    annotationProcessor 'io.github.llamalad7:mixinextras-fabric:0.4.1'
+}
+
+loom {
+    splitEnvironmentSourceSets()
+
+    mods {
+        create("deepchat") {
+            sourceSet sourceSets.main
+        }
+    }
 }
 
 processResources {
@@ -49,14 +56,14 @@ java {
 
 jar {
     from("LICENSE") {
-        rename { "${it}_${base.archivesName.get()}"}
+        rename { "${it}_${project.archivesBaseName}" }
     }
 }
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId = 'deepchat'
+            artifactId = project.archives_base_name
             from components.java
         }
     }
