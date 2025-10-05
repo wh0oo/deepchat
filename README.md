@@ -15,7 +15,7 @@
 - No rate limiting or cooldowns
 - No encryption (planned for v2)
 
-## Installation
+## Installation (Server side only)
 1. Install [Fabric Loader](https://fabricmc.net/use/)
 2. Download the latest `.jar` from [DeepChat on Modrinth](https://modrinth.com/mod/deepchat)
 3. Place in `mods/` folder
