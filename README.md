@@ -2,6 +2,8 @@
 *A Fabric mod for integrating DeepSeek AI into Minecraft chat*
 - Tested in mc-1.21.5-1.21.9
 
+> 📚 **For contributors and maintainers:** See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on managing the repository, including how to change the default branch.
+
 ## Features
 ✅ **Implemented**
 - `!ai <question>` command in chat
