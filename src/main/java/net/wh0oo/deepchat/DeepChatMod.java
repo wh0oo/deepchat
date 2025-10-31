@@ -44,8 +44,8 @@ public class DeepChatMod implements ModInitializer {
             String msg = message.getContent().getString();
             if (!msg.startsWith("!ai ")) return;
 
-            // 1.21.9-safe: get server via world, not directly from player
-            MinecraftServer server = sender.getWorld() != null ? sender.getWorld().getServer() : null;
+            // 1.21.11 snapshot-safe: resolve server via ServerWorld
+            MinecraftServer server = sender.getServerWorld() != null ? sender.getServerWorld().getServer() : null;
             if (server == null) {
                 System.err.println("[ERROR] Could not resolve MinecraftServer from sender world");
                 return;
@@ -184,7 +184,7 @@ public class DeepChatMod implements ModInitializer {
 
             if (message.length() <= SINGLE_MESSAGE_THRESHOLD) {
                 server.getCommandManager().executeWithPrefix(
-                    server.getCommandSource().withLevel(4),
+                    server.getCommandSource().withPermissionLevel(4),
                     "say [AI] " + message
                 );
                 return;
@@ -215,7 +215,7 @@ public class DeepChatMod implements ModInitializer {
 
             for (int i = 0; i < chunks.size(); i++) {
                 server.getCommandManager().executeWithPrefix(
-                    server.getCommandSource().withLevel(4),
+                    server.getCommandSource().withPermissionLevel(4),
                     String.format("say [AI %d/%d] %s", i + 1, chunks.size(), chunks.get(i))
                 );
             }
