@@ -18,7 +18,7 @@ repositories {
 dependencies {
     // Minecraft / Fabric toolchain
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.yarn("${project.yarn_mappings}:v2")
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
@@ -33,7 +33,7 @@ dependencies {
     implementation 'com.squareup.okio:okio:3.7.0'
     include 'com.squareup.okio:okio:3.7.0'
 
-    // Gson is already present on the Minecraft classpath; use for compile only to avoid bundling another copy.
+    // Gson for compile; avoid bundling another copy at runtime
     compileOnly 'com.google.code.gson:gson:2.10.1'
 }
 
