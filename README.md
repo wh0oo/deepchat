@@ -1,6 +1,6 @@
 # DeepChat
 *A Fabric mod for integrating DeepSeek AI into Minecraft chat*
-- Tested in mc-1.21.5-1.21.9
+- Tested in mc-1.21.5-25w44a
 
 ## Features
 ✅ **Implemented**
