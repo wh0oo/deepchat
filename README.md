@@ -16,8 +16,9 @@
 
 ## Installation (Server side only)
 1. Install [Fabric Loader](https://fabricmc.net/use/)
-2. Download the latest `.jar` from [DeepChat on Modrinth](https://modrinth.com/mod/deepchat)
-3. Place in `mods/` folder
+2. As of the 25W44c snapshot [Fabric-language-kotlin](https://modrinth.com/mod/fabric-language-kotlin) is required.
+3. Download the latest `.jar` from [DeepChat on Modrinth](https://modrinth.com/mod/deepchat)
+4. Place in `mods/` folder
 
 ## Configuration
 1. After first run, edit:
