@@ -58,9 +58,10 @@ tasks.withType(JavaCompile).configureEach {
     it.options.release = project.java_version as int
 }
 
-jar {
+tasks.jar {
     from("LICENSE") {
-        rename { "${it}_${project.archivesBaseName}" }
+        // Use the property we define in gradle.properties
+        rename { "${it}_${project.archives_base_name}" }
     }
 }
 
