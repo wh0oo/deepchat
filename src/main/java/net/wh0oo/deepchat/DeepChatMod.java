@@ -1,10 +1,12 @@
+// minecraft mappings 1.21.11
+
 package net.wh0oo.deepchat;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.text.Text;
 import okhttp3.*;
 import com.google.gson.*;
 import java.nio.file.*;
@@ -41,18 +43,18 @@ public class DeepChatMod implements ModInitializer {
         setupConfigFiles();
 
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
-            String msg = message.getContent().getString();
+            String msg = message.decoratedContent().getString();
             if (!msg.startsWith("!ai ")) return;
 
             // 1.21.9-safe: get server via world, not directly from player
-            MinecraftServer server = sender.getWorld() != null ? sender.getWorld().getServer() : null;
+            MinecraftServer server = sender.level() != null ? sender.level().getServer() : null;
             if (server == null) {
                 System.err.println("[ERROR] Could not resolve MinecraftServer from sender world");
                 return;
             }
-            final ServerCommandSource source = server.getCommandSource();
+            final CommandSourceStack source = server.createCommandSourceStack();
 
-            final UUID playerId = sender.getUuid();
+            final UUID playerId = sender.getUUID();
             String query = msg.substring(4).trim();
 
             // Parse [max=X]
@@ -68,7 +70,7 @@ public class DeepChatMod implements ModInitializer {
             }
 
             if (System.currentTimeMillis() - lastQueryTimes.getOrDefault(playerId, 0L) < COOLDOWN_MS) {
-                source.sendError(Text.literal("Please wait 3 seconds between queries!"));
+                source.sendFailure(Component.literal("Please wait 3 seconds between queries!"));
                 return;
             }
             lastQueryTimes.put(playerId, System.currentTimeMillis());
@@ -93,7 +95,7 @@ public class DeepChatMod implements ModInitializer {
         }
     }
 
-    private void processQueryAsync(ServerCommandSource source, String query, Integer maxChars) {
+    private void processQueryAsync(CommandSourceStack source, String query, Integer maxChars) {
         try {
             System.out.println("[DeepChat] Processing: " + query);
             String response = processQueryWithRetry(query, maxChars);
@@ -106,7 +108,7 @@ public class DeepChatMod implements ModInitializer {
 
         } catch (Exception e) {
             System.err.println("[ERROR] " + e.getMessage());
-            source.sendError(Text.literal("AI Error: " +
+            source.sendFailure(Component.literal("AI Error: " +
                 e.getMessage().replaceAll("(?i)api key", "[REDACTED]")));
         }
     }
@@ -183,8 +185,8 @@ public class DeepChatMod implements ModInitializer {
             }
 
             if (message.length() <= SINGLE_MESSAGE_THRESHOLD) {
-                server.getCommandManager().executeWithPrefix(
-                    server.getCommandSource().withLevel(4),
+                server.getCommands().performPrefixedCommand(
+                    server.createCommandSourceStack().withPermission(4),
                     "say [AI] " + message
                 );
                 return;
@@ -214,8 +216,8 @@ public class DeepChatMod implements ModInitializer {
             }
 
             for (int i = 0; i < chunks.size(); i++) {
-                server.getCommandManager().executeWithPrefix(
-                    server.getCommandSource().withLevel(4),
+                server.getCommands().performPrefixedCommand(
+                    server.createCommandSourceStack().withPermission(4),
                     String.format("say [AI %d/%d] %s", i + 1, chunks.size(), chunks.get(i))
                 );
             }
