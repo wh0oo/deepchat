@@ -11,8 +11,8 @@
     "main": ["net.wh0oo.deepchat.DeepChatMod"]
   },
   "depends": {
-    "fabricloader": ">=0.16.14",
-    "minecraft": "1.21.9",
-    "fabric-api": ">=0.127.0+1.21.6"
+    "fabricloader": ">=0.18.2",
+    "minecraft": "1.21.11",
+    "fabric-api": ">=0.139.5+1.21.11"
   }
 }
