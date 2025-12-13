@@ -1,5 +1,4 @@
 // minecraft mappings 1.21.11
-
 package net.wh0oo.deepchat;
 
 import net.fabricmc.api.ModInitializer;
@@ -30,7 +29,7 @@ public class DeepChatMod implements ModInitializer {
     private final Map<UUID, Long> lastQueryTimes = new ConcurrentHashMap<>();
     private static final long COOLDOWN_MS = 3000;
     private static final int MAX_CHUNKS = 3;
-    private static final int SINGLE_MESSAGE_THRESHOLD = 240; // Don't split if under this length
+    private static final int SINGLE_MESSAGE_THRESHOLD = 240;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -46,18 +45,16 @@ public class DeepChatMod implements ModInitializer {
             String msg = message.decoratedContent().getString();
             if (!msg.startsWith("!ai ")) return;
 
-            // 1.21.9-safe: get server via world, not directly from player
             MinecraftServer server = sender.level() != null ? sender.level().getServer() : null;
             if (server == null) {
                 System.err.println("[ERROR] Could not resolve MinecraftServer from sender world");
                 return;
             }
-            final CommandSourceStack source = server.createCommandSourceStack();
 
+            final CommandSourceStack source = server.createCommandSourceStack();
             final UUID playerId = sender.getUUID();
             String query = msg.substring(4).trim();
 
-            // Parse [max=X]
             final Integer maxChars;
             final String finalQuery;
             Matcher matcher = Pattern.compile("\\[max=(\\d+)\\]").matcher(query);
@@ -108,8 +105,9 @@ public class DeepChatMod implements ModInitializer {
 
         } catch (Exception e) {
             System.err.println("[ERROR] " + e.getMessage());
-            source.sendFailure(Component.literal("AI Error: " +
-                e.getMessage().replaceAll("(?i)api key", "[REDACTED]")));
+            source.sendFailure(Component.literal(
+                "AI Error: " + e.getMessage().replaceAll("(?i)api key", "[REDACTED]")
+            ));
         }
     }
 
@@ -152,7 +150,7 @@ public class DeepChatMod implements ModInitializer {
         request.addProperty("model", model);
 
         if (maxChars != null) {
-            request.addProperty("max_tokens", maxChars / 4); // ~4 chars per token
+            request.addProperty("max_tokens", maxChars / 4);
         }
 
         JsonArray messages = new JsonArray();
@@ -186,7 +184,7 @@ public class DeepChatMod implements ModInitializer {
 
             if (message.length() <= SINGLE_MESSAGE_THRESHOLD) {
                 server.getCommands().performPrefixedCommand(
-                    server.createCommandSourceStack().withPermission(4),
+                    server.createCommandSourceStack(),
                     "say [AI] " + message
                 );
                 return;
@@ -197,9 +195,8 @@ public class DeepChatMod implements ModInitializer {
             int remainingLength = message.length();
 
             while (remainingLength > 0 && chunks.size() < MAX_CHUNKS - 1) {
-                int chunkLength = Math.min(220, remainingLength); // Reserve space for prefix
+                int chunkLength = Math.min(220, remainingLength);
                 int splitAt = message.lastIndexOf(' ', start + chunkLength);
-
                 if (splitAt <= start) splitAt = start + chunkLength;
 
                 chunks.add(message.substring(start, splitAt).trim());
@@ -217,7 +214,7 @@ public class DeepChatMod implements ModInitializer {
 
             for (int i = 0; i < chunks.size(); i++) {
                 server.getCommands().performPrefixedCommand(
-                    server.createCommandSourceStack().withPermission(4),
+                    server.createCommandSourceStack(),
                     String.format("say [AI %d/%d] %s", i + 1, chunks.size(), chunks.get(i))
                 );
             }
