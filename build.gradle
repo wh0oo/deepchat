@@ -26,6 +26,10 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp:3.14.9'
     include 'com.squareup.okhttp3:okhttp:3.14.9'
 
+    // Okio required by OkHttp 3.x
+    implementation 'com.squareup.okio:okio:1.17.5'
+    include 'com.squareup.okio:okio:1.17.5'
+
     // Gson for JSON handling
     implementation 'com.google.code.gson:gson:2.10.1'
     include 'com.google.code.gson:gson:2.10.1'
