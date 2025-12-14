@@ -1,5 +1,5 @@
 plugins {
-    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+    id 'fabric-loom' version '1.14.6'
     id 'maven-publish'
 }
 
@@ -22,23 +22,17 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // OkHttp + Okio
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    include 'com.squareup.okhttp3:okhttp:4.12.0'
+    // OkHttp (Java-only, no Kotlin runtime)
+    implementation 'com.squareup.okhttp3:okhttp:3.14.9'
+    include 'com.squareup.okhttp3:okhttp:3.14.9'
 
-    implementation 'com.squareup.okio:okio:3.7.0'
-    include 'com.squareup.okio:okio:3.7.0'
-    implementation 'com.squareup.okio:okio-jvm:3.7.0'
-    include 'com.squareup.okio:okio-jvm:3.7.0'
-
-    // Gson
+    // Gson for JSON handling
     implementation 'com.google.code.gson:gson:2.10.1'
     include 'com.google.code.gson:gson:2.10.1'
 }
 
 processResources {
     inputs.property "version", project.version
-
     filesMatching("fabric.mod.json") {
         expand "version": project.version
     }
@@ -55,16 +49,14 @@ java {
 }
 
 jar {
-    inputs.property "archivesName", project.base.archivesName
-
     from("LICENSE") {
-        rename { "${it}_${inputs.properties.archivesName}" }
+        rename { "${it}_${project.base.archivesName}" }
     }
 }
 
 publishing {
     publications {
-        create("mavenJava", MavenPublication) {
+        mavenJava(MavenPublication) {
             artifactId = project.archives_base_name
             from components.java
         }
