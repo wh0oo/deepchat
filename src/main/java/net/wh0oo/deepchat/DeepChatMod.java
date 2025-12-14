@@ -22,7 +22,7 @@ public class DeepChatMod implements ModInitializer {
 
     // API settings
     private static final String[] VALID_MODELS = {"deepseek-chat", "deepseek-reasoner"};
-    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     // Execution
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -51,10 +51,11 @@ public class DeepChatMod implements ModInitializer {
                 return;
             }
 
-            final CommandSourceStack source = server.createCommandSourceStack();
-            final UUID playerId = sender.getUUID();
+            CommandSourceStack source = server.createCommandSourceStack();
+            UUID playerId = sender.getUUID();
             String query = msg.substring(4).trim();
 
+            // Parse [max=X]
             final Integer maxChars;
             final String finalQuery;
             Matcher matcher = Pattern.compile("\\[max=(\\d+)\\]").matcher(query);
@@ -129,7 +130,7 @@ public class DeepChatMod implements ModInitializer {
         Request request = new Request.Builder()
             .url("https://api.deepseek.com/v1/chat/completions")
             .header("Authorization", "Bearer " + apiKey)
-            .post(RequestBody.create(jsonPayload, JSON))
+            .post(RequestBody.create(JSON, jsonPayload))
             .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
@@ -142,7 +143,9 @@ public class DeepChatMod implements ModInitializer {
     }
 
     private String validateModel(String model) {
-        return Arrays.asList(VALID_MODELS).contains(model.toLowerCase()) ? model : "deepseek-chat";
+        return Arrays.asList(VALID_MODELS).contains(model.toLowerCase())
+            ? model
+            : "deepseek-chat";
     }
 
     private String buildRequestJson(String model, String query, Integer maxChars) {
