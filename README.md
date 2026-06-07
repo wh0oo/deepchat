@@ -23,5 +23,5 @@
 1. After first run, edit:
 config/deepchat/
 - api_key.txt # Your DeepSeek API key
--  model.txt # "deepseek-chat" or "deepseek-reasoner"
+-  model.txt # ~~"deepseek-chat"~~"deepseek-v4-pro" or ~~"deepseek-reasoner"~~ "deepseek-v4-flash"
 
