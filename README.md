@@ -1,11 +1,11 @@
 # DeepChat
 *A Fabric mod for integrating DeepSeek AI into Minecraft chat*
-- Tested in mc-1.21.5-1.21.9 - mc-1.21.5-1.21.11
+- Tested in mc-1.21.5-1.21.9 - mc-1.21.5-1.21.11 and mc-26.1.2
 
 ## Features
 ✅ **Implemented**
 - `!ai <question>` command in chat
-- Supports DeepSeek API (`deepseek-chat` and `deepseek-reasoner` models)
+- 26.1.2 supports DeepSeek API (`deepseek-v4-pro` and `deepseek-v4-flash` models)
 - Automatic config file generation
 - Error handling with 3 retries
 
