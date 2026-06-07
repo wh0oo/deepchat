@@ -1,18 +1,35 @@
-// minecraft mappings 1.21.11
+// minecraft 26.1.2
 package net.wh0oo.deepchat;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import okhttp3.*;
-import com.google.gson.*;
-import java.nio.file.*;
+import net.minecraft.server.level.ServerPlayer;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 import java.io.IOException;
-import java.util.concurrent.*;
-import java.util.*;
-import java.util.regex.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class DeepChatMod implements ModInitializer {
     // Config paths
@@ -21,7 +38,11 @@ public class DeepChatMod implements ModInitializer {
     private static final String MODEL_PATH = CONFIG_DIR + "model.txt";
 
     // API settings
-    private static final String[] VALID_MODELS = {"deepseek-chat", "deepseek-reasoner"};
+    private static final String DEFAULT_MODEL = "deepseek-v4-flash";
+    private static final String[] VALID_MODELS = {
+        "deepseek-v4-flash",
+        "deepseek-v4-pro"
+    };
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     // Execution
@@ -41,17 +62,18 @@ public class DeepChatMod implements ModInitializer {
     public void onInitialize() {
         setupConfigFiles();
 
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> executor.shutdown());
+
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             String msg = message.decoratedContent().getString();
             if (!msg.startsWith("!ai ")) return;
 
             MinecraftServer server = sender.level() != null ? sender.level().getServer() : null;
             if (server == null) {
-                System.err.println("[ERROR] Could not resolve MinecraftServer from sender world");
+                System.err.println("[DeepChat] ERROR: Could not resolve MinecraftServer from sender world");
                 return;
             }
 
-            CommandSourceStack source = server.createCommandSourceStack();
             UUID playerId = sender.getUUID();
             String query = msg.substring(4).trim();
 
@@ -67,13 +89,19 @@ public class DeepChatMod implements ModInitializer {
                 finalQuery = query;
             }
 
-            if (System.currentTimeMillis() - lastQueryTimes.getOrDefault(playerId, 0L) < COOLDOWN_MS) {
-                source.sendFailure(Component.literal("Please wait 3 seconds between queries!"));
+            if (finalQuery.isBlank()) {
+                sender.sendSystemMessage(Component.literal("Usage: !ai <question>"));
                 return;
             }
-            lastQueryTimes.put(playerId, System.currentTimeMillis());
 
-            executor.submit(() -> processQueryAsync(source, finalQuery, maxChars));
+            long now = System.currentTimeMillis();
+            if (now - lastQueryTimes.getOrDefault(playerId, 0L) < COOLDOWN_MS) {
+                sender.sendSystemMessage(Component.literal("Please wait 3 seconds between queries!"));
+                return;
+            }
+            lastQueryTimes.put(playerId, now);
+
+            executor.submit(() -> processQueryAsync(server, playerId, finalQuery, maxChars));
         });
     }
 
@@ -82,18 +110,18 @@ public class DeepChatMod implements ModInitializer {
             Files.createDirectories(Paths.get(CONFIG_DIR));
 
             if (!Files.exists(Paths.get(API_KEY_PATH))) {
-                Files.write(Paths.get(API_KEY_PATH), "paste-your-key-here".getBytes());
+                Files.writeString(Paths.get(API_KEY_PATH), "paste-your-key-here");
             }
 
             if (!Files.exists(Paths.get(MODEL_PATH))) {
-                Files.write(Paths.get(MODEL_PATH), "deepseek-chat".getBytes());
+                Files.writeString(Paths.get(MODEL_PATH), DEFAULT_MODEL);
             }
         } catch (IOException e) {
-            System.err.println("Config Error: " + e.getMessage());
+            System.err.println("[DeepChat] Config Error: " + e.getMessage());
         }
     }
 
-    private void processQueryAsync(CommandSourceStack source, String query, Integer maxChars) {
+    private void processQueryAsync(MinecraftServer server, UUID playerId, String query, Integer maxChars) {
         try {
             System.out.println("[DeepChat] Processing: " + query);
             String response = processQueryWithRetry(query, maxChars);
@@ -102,13 +130,20 @@ public class DeepChatMod implements ModInitializer {
                 throw new IOException("Empty API response");
             }
 
-            executeServerSay(source.getServer(), cleanMessage(response), maxChars);
+            String cleaned = cleanMessage(response);
+
+            server.execute(() -> executeServerSay(server, cleaned, maxChars));
 
         } catch (Exception e) {
-            System.err.println("[ERROR] " + e.getMessage());
-            source.sendFailure(Component.literal(
-                "AI Error: " + e.getMessage().replaceAll("(?i)api key", "[REDACTED]")
-            ));
+            String safeMessage = "AI Error: " + e.getMessage().replaceAll("(?i)api key", "[REDACTED]");
+            System.err.println("[DeepChat] ERROR: " + safeMessage);
+
+            server.execute(() -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                if (player != null) {
+                    player.sendSystemMessage(Component.literal(safeMessage));
+                }
+            });
         }
     }
 
@@ -124,7 +159,8 @@ public class DeepChatMod implements ModInitializer {
 
     private String processQueryWithRetry(String query, Integer maxChars) throws Exception {
         String apiKey = Files.readString(Paths.get(API_KEY_PATH)).trim();
-        String model = validateModel(Files.readString(Paths.get(MODEL_PATH)).trim());
+        String configuredModel = Files.readString(Paths.get(MODEL_PATH)).trim();
+        String model = validateModel(configuredModel);
         String jsonPayload = buildRequestJson(model, query, maxChars);
 
         Request request = new Request.Builder()
@@ -134,18 +170,36 @@ public class DeepChatMod implements ModInitializer {
             .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
-            String rawResponse = response.body().string();
+            String rawResponse = response.body() != null ? response.body().string() : "";
+
             if (!response.isSuccessful()) {
                 throw new IOException("HTTP " + response.code() + ": " + rawResponse);
             }
+
             return parseResponse(rawResponse);
         }
     }
 
     private String validateModel(String model) {
-        return Arrays.asList(VALID_MODELS).contains(model.toLowerCase())
-            ? model
-            : "deepseek-chat";
+        if (model == null || model.isBlank()) {
+            return DEFAULT_MODEL;
+        }
+
+        String normalized = model.trim().toLowerCase(Locale.ROOT);
+
+        for (String validModel : VALID_MODELS) {
+            if (validModel.equals(normalized)) {
+                return normalized;
+            }
+        }
+
+        System.err.println(
+            "[DeepChat] Invalid model in config/deepchat/model.txt: '" + model + "'. " +
+            "Valid models are: deepseek-v4-flash, deepseek-v4-pro. " +
+            "Using default: " + DEFAULT_MODEL
+        );
+
+        return DEFAULT_MODEL;
     }
 
     private String buildRequestJson(String model, String query, Integer maxChars) {
@@ -153,7 +207,7 @@ public class DeepChatMod implements ModInitializer {
         request.addProperty("model", model);
 
         if (maxChars != null) {
-            request.addProperty("max_tokens", maxChars / 4);
+            request.addProperty("max_tokens", Math.max(1, maxChars / 4));
         }
 
         JsonArray messages = new JsonArray();
@@ -168,9 +222,11 @@ public class DeepChatMod implements ModInitializer {
 
     private String parseResponse(String rawResponse) throws IOException {
         JsonObject json = JsonParser.parseString(rawResponse).getAsJsonObject();
+
         if (json.has("error")) {
             throw new IOException(json.get("error").toString());
         }
+
         return json.getAsJsonArray("choices")
             .get(0).getAsJsonObject()
             .getAsJsonObject("message")
@@ -223,11 +279,7 @@ public class DeepChatMod implements ModInitializer {
             }
 
         } catch (Exception e) {
-            System.err.println("[Broadcast] Failed: " + e.getMessage());
+            System.err.println("[DeepChat] Broadcast failed: " + e.getMessage());
         }
-    }
-
-    public void onDisable() {
-        executor.shutdown();
     }
 }
